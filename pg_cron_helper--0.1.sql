@@ -78,6 +78,24 @@
                   on delete set null
             );
         perform pg_catalog.pg_extension_config_dump('job_definition', '');
+        
+
+        /*
+         *
+         */
+        create table job_run
+            ( job_definition_pk      bigint       not null
+            , job_run_details_runid  bigint       primary key
+            , constraint fk_job_run_job_definition
+                  foreign key (job_definition_pk)
+                  references cron.job_definition (pk)
+                  on delete cascade
+            , constraint fk_job_run_job_run_details 
+                  foreign key (job_run_details_runid)
+                  references cron.job_run_details(runid)
+                  on delete cascade
+            );
+        create index job_run_job_definition_pk on cron.job_run(job_definition_pk);
 
         /*
          *
@@ -378,6 +396,9 @@
                 raise exception 'Procedure cron.job_execution_started(name, name, varchar, boolean) must be invoked from a running job';
             end if;
             
+            insert into cron.job_run (job_definition_pk, job_run_details_runid)
+                values (v_description_pk, v_runid);
+            
             if v_cron_pattern = '' then
                 perform cron.unschedule(job_id => v_jobid);
                 update cron.job_definition
@@ -571,7 +592,7 @@
                             cron_day_of_week := cron_day_of_week || '2';
                         when dow_text ~ '^(3|W|WED|WEDNESDAY)$' then
                             cron_day_of_week := cron_day_of_week || '3';
-                        when dow_text ~ '^(4|TH|THUR|THURSDAY)$' then
+                        when dow_text ~ '^(4|TH|THU|THURSDAY)$' then
                             cron_day_of_week := cron_day_of_week || '4';
                         when dow_text ~ '^(5|F|FRI|FRIDAY)$' then
                             cron_day_of_week := cron_day_of_week || '5';
@@ -1003,6 +1024,33 @@
             end loop;
         end -- _srvr_list_jobs
         $body$;
+
+		/*
+		 *
+		 */
+		create function _srvr_get_job_state
+		    ( p_database_name     name
+		    , p_user_name         name
+		    , p_job_name          varchar(128)
+		    ) returns text
+		    security definer language plpgsql as $body$
+		declare
+		     result_str           text;
+		begin
+		    select coalesce(det.status, case when def.jobid is null then 'existing' else 'scheduled' end)
+		      into result_str 
+            from cron.job_definition def
+               , lateral (select max(job_run_details_runid) runid from cron.job_run where job_definition_pk = def.pk) run
+            left join cron.job_run_details det on det.runid = run.runid
+            where def.database_name = p_database_name
+              and def.user_name = p_user_name
+              and def.job_name = p_job_name;
+            if not found then
+                result_str := 'unknown';
+            end if;
+            return result_str;
+		end;  -- _srvr_get_job_state
+		$body$;
     else
         /*
          * This part only goes into a pg_cron client database - the database in which pg_cron is NOT installed
@@ -1391,5 +1439,44 @@ begin
     if result_str = 'ERROR' then
         raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
     end if;
+end
+$body$;
+
+/*
+ *
+ */
+create function get_job_state
+    ( job_name             varchar(128)
+    , user_name            name default current_user
+    ) returns text
+    security definer language plpgsql as $body$
+declare
+     result_str           text;
+     sql                  text;
+     function_result      text;
+begin    
+    result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
+    if result_str = 'ERROR' then
+        raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
+    end if;
+    begin
+        sql := format( 'select cron._srvr_get_job_state(%L, %L, %L)'
+                     , current_database()
+                     , user_name
+                     , job_name
+                     );
+        select job_state into function_result from public.dblink('cron_server', sql) f(job_state text);
+    exception when others then   
+        result_str := public.dblink_disconnect('cron_server');
+        if result_str = 'ERROR' then
+            raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
+        end if;
+        raise;
+    end;
+    result_str := public.dblink_disconnect('cron_server');
+    if result_str = 'ERROR' then
+        raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
+    end if;
+    return function_result;
 end
 $body$;
