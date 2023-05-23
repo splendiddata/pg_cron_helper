@@ -400,6 +400,11 @@
         		                          , command => format('call cron._cron_job_execution(%L, %L, false, ''select 1;'');',p_user_name, p_job_name)
         		                          );
         		    return;
+        		else
+                    perform cron.alter_job( job_id => v_jobid
+                                          , schedule => v_cron_pattern
+                                          , command => format('call cron._cron_job_execution(%L, %L, false, %L);', p_user_name, p_job_name, v_job_action)
+                                          );
                 end if;
             end if;
             
@@ -1299,12 +1304,22 @@ begin
         raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
     end if;
     begin
+        sql := 'begin';
+        result_str := public.dblink_exec('cron_server', sql);
+        if result_str = 'ERROR' then
+            raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
+        end if;
         sql := format( 'call cron._srvr_job_execution_started(%L, %L, %L, %L)'
                      , current_database()
                      , user_name
                      , job_name
                      , once
                      );
+        result_str := public.dblink_exec('cron_server', sql);
+        if result_str = 'ERROR' then
+            raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
+        end if;
+        sql := 'commit';
         result_str := public.dblink_exec('cron_server', sql);
         if result_str = 'ERROR' then
             raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
