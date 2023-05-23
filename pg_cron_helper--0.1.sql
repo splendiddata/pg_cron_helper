@@ -194,7 +194,7 @@
                 raise exception 'job ''%'' is not known in database ''%'' for user ''%''', p_job_name, p_database_name, p_user_name;
             end if;
             if v_jobid is null then
-                raise select pg_catalog.pg_extension_config_dump('variables', '');notice 'job ''%'' is database ''%'' is already disabled', p_job_name, p_database_name;
+                raise notice 'job ''%'' is database ''%'' is already disabled', p_job_name, p_database_name;
                 return;
             end if;
             
