@@ -370,12 +370,13 @@
             v_description_pk   bigint;
             v_jobid            bigint;
             v_runid            bigint;
-            v_status           text;
+            v_status           text := '';
             v_start_date       timestamp with time zone;
             v_end_date         timestamp with time zone;
             v_repeat_interval  text;
             v_cron_pattern     text;
             v_job_action       text;
+            v_retry_count      int := 0;
         begin
             select pk, jobid, job_action, start_date, repeat_interval, end_date, cron_pattern
               into v_description_pk, v_jobid, v_job_action, v_start_date, v_repeat_interval, v_end_date, v_cron_pattern 
@@ -385,20 +386,27 @@
             if not found then
                 raise exception 'job ''%'' is not known in database ''%'' for user ''%''', p_job_name, p_database_name, p_user_name;
             end if;
-            
-            select runid, status into v_runid, v_status
-            from cron.job_run_details
-            where runid = ( select max(runid)
-                            from cron.job_run_details
-                            where jobid = v_jobid
-                          );
+
+            while v_retry_count < 10 and (not found or v_status != 'running') loop
+                v_retry_count := v_retry_count + 1;
+                select runid, status into v_runid, v_status
+	            from cron.job_run_details
+	            where runid = ( select max(runid)
+	                            from cron.job_run_details
+	                            where jobid = v_jobid
+	                          );
+				if not found or v_status != 'running' then
+                    -- maybe the code starting the job hasn't committed yet
+                	perform pg_sleep(v_retry_count);
+                end if;
+            end loop;
             if not found or v_status != 'running' then
-                raise exception 'Procedure cron.job_execution_started(name, name, varchar, boolean) must be invoked from a running job';
+                 raise exception 'Procedure cron.job_execution_started(name, name, varchar, boolean) must be invoked from a running job, status = %', v_status;
             end if;
-            
+
             insert into cron.job_run (job_definition_pk, job_run_details_runid)
                 values (v_description_pk, v_runid);
-            
+
             if v_cron_pattern = '' then
                 perform cron.unschedule(job_id => v_jobid);
                 update cron.job_definition
@@ -407,7 +415,7 @@
                 where pk = v_description_pk;
                 return;
             end if;
-        
+
             if p_once then
                 if v_cron_pattern ~ '^=' then
                     perform cron.alter_job( job_id => v_jobid
@@ -428,7 +436,7 @@
                                           );
                 end if;
             end if;
-            
+
             if v_cron_pattern ~ '^=|^>' then
                 v_cron_pattern := cron._srvr_make_cron_patten(v_start_date, v_end_date, v_repeat_interval);
                 update cron.job_definition set cron_pattern = v_cron_pattern where pk = v_description_pk;
@@ -494,7 +502,7 @@
             next_run_timestamp  timestamp with time zone;
             next_cron_timestamp timestamp;
             new_timestamp       timestamp;
-            result_str          text;
+            result_str          text := '';
             local_utc_offset    interval;
             cron_utc_offset     interval;
             tz_delta            int;
@@ -531,7 +539,7 @@
                         cron_minute := extract(minute from p_start_timestamp);
                         cron_hour := extract(hour from p_start_timestamp);
                         cron_day_of_month := extract(day from p_start_timestamp);
-                        cron_month := extract(month from result_strp_start_timestamp);
+                        cron_month := extract(month from p_start_timestamp);
                     when 'MONTHLY' then
                         base_interval := '1 month'::interval;
                         base_interval := '1 year'::interval;
@@ -646,7 +654,7 @@
                             calculate_next_run := true;
                         end if;
         	        when 'SECONDLY' then
-        	            cron_interval := value || ' seconds';
+        	            result_str := value || ' seconds';
                     else
                         calculate_next_run := true;
                     end case;
@@ -697,6 +705,7 @@
             else
                 next_run_timestamp := timestamp_now + interval '1 minute';
             end if;
+
             if calculate_next_run then
                 if cron_interval is null then
                     cron_interval = base_interval;
@@ -759,7 +768,9 @@
                 next_run_timestamp = next_cron_timestamp at time zone cron_time_zone at time zone local_time_zone;
                 result_str := '=' || cron._srvr_cron_at_timestamp(next_run_timestamp);
             else
-                result_str := format('%s %s %s %s %s', cron_minute, cron_hour, cron_day_of_month, cron_month, cron_day_of_week);
+	            if result_str = '' then
+	                result_str := format('%s %s %s %s %s', cron_minute, cron_hour, cron_day_of_month, cron_month, cron_day_of_week);
+                end if;
                 if cron._srvr_calculate_next_run_from_cron_pattern(result_str, p_end_timestamp) is null then
                     return '';
                 end if;
