@@ -1231,7 +1231,8 @@ $body$;
  */
 create procedure stop_job
     ( job_name             varchar(128)
-    , user_name            name default current_user
+    , force                boolean      default false
+    , user_name            name         default current_user
     ) security definer language plpgsql as $body$
 declare
      result_str           text;
@@ -1242,10 +1243,11 @@ begin
          raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
      end if;
      begin
-         sql := format( 'call cron._srvr_stop_job(%L, %L, %L)'
+         sql := format( 'call cron._srvr_stop_job(%L, %L, %L, %L)'
                       , current_database()
                       , user_name
                       , job_name
+                      , force
                       ); 
          result_str := public.dblink_exec('cron_server', sql);
          if result_str = 'ERROR' then
