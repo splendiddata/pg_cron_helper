@@ -568,7 +568,6 @@ job run detail via the job table may not always be a good idea.';
                         cron_month := extract(month from p_start_timestamp);
                     when 'MONTHLY' then
                         base_interval := '1 month'::interval;
-                        base_interval := '1 year'::interval;
                         cron_minute := extract(minute from p_start_timestamp);
                         cron_hour := extract(hour from p_start_timestamp);
                         cron_day_of_month := extract(day from p_start_timestamp);
@@ -1584,4 +1583,5 @@ function cron.get_job_state
               'scheduled' => job is scheduled, no previous run known
               'running'   => job is currently active
               'succeeded' => the last run was succesful
-              'failed'    => the last run was unsuccesful$$;
+              'failed'    => the last run was unsuccesful
+              'unknown'   => The job definition is unknown$$;
