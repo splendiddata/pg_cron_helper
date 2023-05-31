@@ -1,7 +1,7 @@
 # pg_cron_helper
 The pg_cron_helper database extension is supposed to help running "jobs" on a simple time-based schedule. Of course you are far better of using an external scheduler, but if you must schedule jobs inside a Postgres database then this extension may be of some help.
  
-Postgres extension pg_cron_helper is a wrapper around the [pg_cron](https://github.com/citusdata/pg_cron) extension. It also depends n contrib extensions postgres_fdw and dblink. Pg_cron_helper "helps" making a job scheduling interface available in more that one database in the Postgres cluster, and it supports a repeat interval that is roughly based on Oracle's repeat_interval definition in dbms_scheduler (altough it doesn't even come anywhere near the possibilities of Oracle's dbms_scheduler package).
+Postgres extension pg_cron_helper is a wrapper around the [pg_cron](https://github.com/citusdata/pg_cron) extension. It also depends on contrib extensions postgres_fdw and dblink. Pg_cron_helper "helps" making a job scheduling interface available in more that one database in the Postgres cluster, and it supports a repeat interval that is roughly based on Oracle's repeat_interval definition in dbms_scheduler (altough it doesn't even come anywhere near the possibilities of Oracle's dbms_scheduler package).
 
 ## Installation
 First make the pg_cron_helper extension available in the Postgres installation directory either using the pgxs infrastructure:<br>
@@ -123,7 +123,7 @@ procedure cron.enable_job
 ```
 **Schedules the job if a repeat_interval is present**
 
-Only a job that has a repeat_inteval can be enabled.
+Only a job that has a repeat_interval can be enabled.
 
 **Arguments:**
 
@@ -173,7 +173,7 @@ procedure cron.run_job
 ```
 **Runs the job "now"**
 
-No, in fact: schedules the job to run in five seconds. The reason for that is the fact that pg_cron can only schedule jobs. The five seconds are a safety margin. As soon as the job starts running, it will be unscheduled - or rescheduled according to its defined schedule.
+No, it doesn't. In fact it schedules the job to run in five seconds. The reason for that is the fact that pg_cron can only schedule jobs. The five seconds are a safety margin. As soon as the job starts running, it will be unscheduled - or rescheduled according to its defined schedule.
 
 A job can be run at any time, regardless if it is enabled or not. 
 
@@ -201,7 +201,7 @@ procedure cron.stop_job
 ```
 **Aborts a running job**
 
-If the job is not running, nothign will happen 
+If the job is not running, nothing will happen 
 
 **Arguments:**
 
