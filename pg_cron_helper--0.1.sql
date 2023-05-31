@@ -36,14 +36,9 @@
      execute format ('create server if not exists cron_ctrl_server
          foreign data wrapper postgres_fdw
          options(dbname %L)', cron_db_name);
+     comment on server cron_ctrl_server is 'For communication with the Cron control database';
      execute format ('create user mapping if not exists for current_user
          server cron_ctrl_server
-         options (user %L)', current_user);
-     execute format ('create server if not exists cron_server
-         foreign data wrapper postgres_fdw
-         options(dbname %L)', cron_db_name);
-     execute format ('create user mapping if not exists for current_user
-         server cron_server
          options (user %L)', current_user);
 
     if current_database() = cron_db_name then
@@ -78,10 +73,28 @@
                   on delete set null
             );
         perform pg_catalog.pg_extension_config_dump('job_definition', '');
-        
+        comment on table cron.job_definition is 'Contains job definitions';
+        comment on column cron.job_definition.pk is 'Technical primary key';
+        comment on column cron.job_definition.database_name is 'Defines in which database the job will be executed. Also part of the unique identification of a job.';
+        comment on column cron.job_definition.user_name is 'Part of the uniwue identification of a job';
+        comment on column cron.job_definition.job_name is 'Unique identification of the job witin user_name and database_name';
+        comment on column cron.job_definition.job_action is 'Contains the sql script that is to be executed';
+        comment on column cron.job_definition.start_date is 'Timestamp after which the job is to be scheduled if repeat_interval is not empty';
+        comment on column cron.job_definition.repeat_interval is 'Cron pattern or Oracle style interval definition
+If empty, the job is just defined, not scheduled. It can be activated using the cron.job_run() procedure';
+        comment on column cron.job_definition.end_date is 'Timestamp after which the job will not be scheduled any more';
+        comment on column cron.job_definition.auto_drop is 'Not effective yet';
+        comment on column cron.job_definition.comments is 'Just comment on the job';
+        comment on column cron.job_definition.jobid is 'Refers to the cron.job table if the job is scheduled';
+        comment on column cron.job_definition.cron_pattern is 'The cron pattern that is currently used by this job
+If it starts with ''='', then a single run is scheduled - the pattern must be recaclulated for the next run.
+If it starts with ''>'', then the next run was more than a year in the future on calculation time. The job action will
+                       not be executed - a new run timestamp will be calculated and scheduled
+If empty, the job is disabled - not scheduled
+Otherwise a cron pattern that will define the next execution(s)';
 
         /*
-         *
+         * table job_run
          */
         create table job_run
             ( job_definition_pk      bigint       not null
@@ -96,9 +109,14 @@
                   on delete cascade
             );
         create index job_run_job_definition_pk on cron.job_run(job_definition_pk);
+        comment on table cron.job_run is 'Connects the cron.job_run_details table to the cron.job_definition table.
+Rationale: In time a job definition may cause several cron.job rows, so connecting the job definition to
+job run detail via the job table may not always be a good idea.';
+        comment on column cron.job_run.job_definition_pk is 'reference to the cron.job_definition table';
+        comment on column cron.job_run.job_run_details_runid is 'reference to the cron.job_run_details table';
 
         /*
-         *
+         * procedure _srvr_create_job
          */
         create procedure _srvr_create_job
             ( p_database_name        name
@@ -124,9 +142,10 @@
             end if;
         end -- _srvr_create_job
         $body$;
+        comment on procedure cron._srvr_create_job is 'Internal function define a job in the cron server database';
 
         /*
-         *
+         * procedure _srvr_enable_job
          */
         create procedure _srvr_enable_job
             ( p_database_name        name
@@ -190,9 +209,10 @@
             where pk = v_derinition_pk;
         end -- _srvr_enable_job
         $body$;
+        comment on procedure cron._srvr_enable_job is 'Internal function schedule a job in the cron server database';
 
         /*
-         *
+         * procedure _srvr_disable_job
          */
         create procedure _srvr_disable_job
             ( p_database_name        name
@@ -224,9 +244,10 @@
             where pk = v_description_pk;
         end -- _srvr_disable_job
         $body$;
+        comment on procedure cron._srvr_disable_job is 'Internal function unschedule a job in the cron server database';
 
         /*
-         *
+         * procedure _srvr_drop_job
          */
         create procedure _srvr_drop_job
             ( p_database_name        name
@@ -268,9 +289,10 @@
             where pk = v_description_pk;
         end -- _srvr_drop_job
         $body$;
+        comment on procedure cron._srvr_drop_job is 'Internal function remove a job from the cron server database';
 
         /*
-         *
+         * procedure _srvr_stop_job
          */
         create procedure _srvr_stop_job
             ( p_database_name        name
@@ -295,6 +317,7 @@
             into v_job_pid
             from cron.job_run_details
             where jobid = v_jobid
+            and status = 'running'
             order by runid desc
             limit 1;
             if not found then
@@ -303,15 +326,16 @@
             end if;
             
             if p_force then
-                perform pg_terminate_backend(job_pid);
+                perform pg_terminate_backend(v_job_pid);
             else
-                perform pg_cancel_backend(job_pid);
+                perform pg_cancel_backend(v_job_pid);
             end if;
         end -- _srvr_stop_job
         $body$;
+        comment on procedure cron._srvr_stop_job is 'Internal function to abort a job execution in the cron server database';
 
         /*
-         *
+         * procedure _srvr_run_job
          */
         create procedure _srvr_run_job
             ( p_database_name        name
@@ -353,9 +377,10 @@
         	end if;
         end -- _srvr_run_job
         $body$;
+        comment on procedure cron._srvr_run_job is 'Internal function to schedule a job in 5 seconds in the cron server database';
 
         /*
-         *
+         * procedure _srvr_job_execution_started
          */
         create procedure _srvr_job_execution_started
             ( p_database_name        name
@@ -472,9 +497,10 @@
             end if;
         end -- _srvr_job_execution_started
         $body$;
+        comment on procedure cron._srvr_job_execution_started is 'Internal function to indicate that a job execution has started in the cron server database';
 
         /*
-         *
+         * function _srvr_make_cron_patten
          */
         create function _srvr_make_cron_patten
             ( p_start_timestamp timestamp with time zone
@@ -778,9 +804,10 @@
             return result_str;
         end -- _srvr_make_cron_patten
         $body$;
+        comment on function cron._srvr_make_cron_patten is 'Internal function to calculate a cron pattern from a scheduler pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_cron_at_timestamp
          */
         create function _srvr_cron_at_timestamp(p_at_timestamp timestamp with time zone) returns text language plpgsql as $body$
         declare
@@ -798,10 +825,11 @@
                          , extract(dow from v_schedule_timestamp)
                          );
         end
-        $body$;
+        $body$; -- _srvr_cron_at_timestamp
+        comment on function cron._srvr_cron_at_timestamp is 'Internal function to calculate a cron pattern to run at a given timestamp in the cron server database';
 
         /*
-         *
+         * function _srvr_calculate_next_run_from_cron_pattern
          */
         create function _srvr_calculate_next_run_from_cron_pattern
             ( cron_pattern    text
@@ -888,9 +916,10 @@
             return next_run_timestamp at time zone cron_time_zone at time zone local_time_zone;
         end -- _srvr_calculate_next_run_from_cron_pattern
         $body$;
+        comment on function cron._srvr_calculate_next_run_from_cron_pattern is 'Internal function to calculate the next run timestamp from a given cron pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_first_valid_month
          */
         create function _srvr_first_valid_month(month_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -912,9 +941,10 @@
             return result_timestamp;
         end -- _srvr_first_valid_month
         $body$;
+        comment on function cron._srvr_first_valid_month is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_first_valid_day_of_month
          */
         create function _srvr_first_valid_day_of_month(day_of_month_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -932,13 +962,14 @@
         	        end loop;
         	        result_timestamp := date_trunc('day', result_timestamp);
         	    end if;
-        	 end if;
-        	 return result_timestamp;
-         end -- _srvr_first_valid_day_of_month
-         $body$;
+        	end if;
+            return result_timestamp;
+        end -- _srvr_first_valid_day_of_month
+        $body$;
+        comment on function cron._srvr_first_valid_day_of_month is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_first_valid_day_of_week
          */
          create function _srvr_first_valid_day_of_week(day_of_week_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
@@ -960,9 +991,10 @@
         	 return result_timestamp;
          end -- _srvr_first_valid_day_of_week
          $body$;
+        comment on function cron._srvr_first_valid_day_of_week is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_first_valid_hour
          */
          create function _srvr_first_valid_hour(hour_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
@@ -984,9 +1016,10 @@
         	 return result_timestamp;
          end -- _srvr_first_valid_hour
          $body$;
+        comment on function cron._srvr_first_valid_hour is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_first_valid_minute
          */
          create function _srvr_first_valid_minute(minute_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
@@ -1008,9 +1041,10 @@
         	 return result_timestamp;
          end -- _srvr_first_valid_minute
          $body$;
+        comment on function cron._srvr_first_valid_minute is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         *
+         * function _srvr_list_jobs
          */
          create function _srvr_list_jobs(p_database_name name)
             returns setof json
@@ -1035,9 +1069,10 @@
             end loop;
         end -- _srvr_list_jobs
         $body$;
+        comment on function cron._srvr_list_jobs is 'Internal function to list existing jobs in the cron server database';
 
 		/*
-		 *
+		 * function _srvr_get_job_state
 		 */
 		create function _srvr_get_job_state
 		    ( p_database_name     name
@@ -1048,7 +1083,7 @@
 		declare
 		     result_str           text;
 		begin
-		    select coalesce(det.status, case when def.jobid is null then 'existing' else 'scheduled' end)
+		    select coalesce(det.status, case when def.jobid is null then 'defined' else 'scheduled' end)
 		      into result_str 
             from cron.job_definition def
                , lateral (select max(job_run_details_runid) runid from cron.job_run where job_definition_pk = def.pk) run
@@ -1062,6 +1097,7 @@
             return result_str;
 		end;  -- _srvr_get_job_state
 		$body$;
+		comment on function cron._srvr_get_job_state is 'Internal function to select a job''s state in the cron server database';
     else
         /*
          * This part only goes into a pg_cron client database - the database in which pg_cron is NOT installed
@@ -1096,18 +1132,18 @@ end
 $do$;
 
 /*
- *
+ * procedure create_job
  */
 create procedure create_job
     ( job_name             varchar(128)
     , job_action           text
-    , start_date           timestamp with time zone default current_timestamp::timestamp(0) with time zone
-    , repeat_interval      varchar default ''
-    , end_date             timestamp with time zone default null
-    , enabled              boolean default false
-    , auto_drop            boolean default true
-    , comments             text default ''
-    , user_name            name default current_user
+    , start_date           timestamp with time zone  default current_timestamp::timestamp(0) with time zone
+    , repeat_interval      varchar                   default ''
+    , end_date             timestamp with time zone  default null
+    , enabled              boolean                   default false
+    , auto_drop            boolean                   default true
+    , comments             text                      default ''
+    , user_name            name                      default current_user
     ) security definer language plpgsql as $body$
 declare
      result_str           text;
@@ -1147,9 +1183,21 @@ begin
      end if;
 end
 $body$;
-
+comment on procedure cron.create_job is 'Defines a new job
+procedure cron.create_job
+    ( job_name         => Name of the job. Must be unique (within user_name)
+    , job_action       => Sql script that is to be executed
+    , start_date       => When to start the repeat interval
+    , repeat_interval  => Cron pattern or Oracle style run pattern
+    , end_date         => When to stop the repeat interval
+    , enabled          => Must the repeat interval be enabled
+    , auto_drop        => Not functional yet
+    , comments         => Just comment
+    , user_name        => Who defined the job
+    )';
+    
 /*
- *
+ * procedure enable_job
  */
 create procedure enable_job
     ( job_name             varchar(128)
@@ -1186,9 +1234,14 @@ begin
     end if;
 end
 $body$;
-
+comment on procedure cron.enable_job is 'Makes sure the job is scheduled.
+procedure cron.enable_job
+    ( job_name         => Name of the job to be enabled
+    , user_name        => The user name 
+    )';
+    
 /*
- *
+ * procedure disable_job
  */
 create procedure disable_job
     ( job_name             varchar(128)
@@ -1225,9 +1278,14 @@ begin
     end if;
 end
 $body$;
+comment on procedure cron.disable_job is 'Removes the job from the schedule
+procedure cron.disable_job
+    ( job_name         => Name of the job to be enabled
+    , user_name        => For which user
+    )';
 
 /*
- *
+ * procedure stop_job
  */
 create procedure stop_job
     ( job_name             varchar(128)
@@ -1266,9 +1324,15 @@ begin
      end if;
 end
 $body$;
+comment on procedure cron.stop_job is 'Stops (aborts) the execution of a job if it is running
+create procedure cron.stop_job
+    ( job_name         => Name of the job to be aborted
+    , force            => true uses pg_terminate_backend(), false uses pg_cancel_backend()
+    , user_name        => For which user
+    )';
 
 /*
- *
+ * procedure run_job
  */
 create procedure run_job
     ( job_name             varchar(128)
@@ -1305,9 +1369,14 @@ begin
      end if;
 end
 $body$;
+comment on procedure cron.run_job is 'Starts the execution of the job within 5 seconds, regardless if the job is enabled or not
+procedure cron.run_job
+    ( job_name         => Name of the job to be started "now"
+    , user_name        => "owner" of the job
+    )';
 
 /*
- *
+ * procedure drop_job
  */
 create procedure drop_job
     ( job_name             varchar(128)
@@ -1346,9 +1415,15 @@ begin
     end if;
 end
 $body$;
+comment on procedure cron.drop_job is 'Deletes the job definition
+procedure cron.drop_job
+    ( job_name         => Name of the job to be started "now"
+    , force            => if the job is currently running then perfomr pg_terminate_backend() to stop it
+    , user_name        => User for which the job was defined
+    )';
 
 /*
- *
+ * procedure _cron_job_execution
  */
 create procedure _cron_job_execution
     ( user_name name
@@ -1400,9 +1475,10 @@ begin
     execute task;
 end
 $body$;
+comment on procedure cron._cron_job_execution is 'Internal procedure to inform the cron server that a job has started';
 
 /*
- *
+ * type job_record
  */
 create type job_record as
     ( job_name             varchar(128) 
@@ -1416,6 +1492,9 @@ create type job_record as
     , comments             text
     );
 
+/*
+ * function list_jobs
+ */
 create function list_jobs()
     returns setof cron.job_record
     security definer language plpgsql as $body$
@@ -1454,9 +1533,12 @@ begin
     end if;
 end
 $body$;
+comment on function cron.list_jobs is 'Shows the peculiarities of all defined jobs
+function cron.list_jobs()
+    returns setof cron.job_record';
 
 /*
- *
+ * function get_job_state
  */
 create function get_job_state
     ( job_name             varchar(128)
@@ -1493,3 +1575,13 @@ begin
     return function_result;
 end
 $body$;
+comment on function cron.get_job_state is $$Returns the state of the specified job
+function cron.get_job_state
+    ( job_name         => Name of the job to be started "now"
+    , user_name        => User name for whom the job is defined
+    ) returns text     => one of:
+              'defined'   => job is defined but not scheduled
+              'scheduled' => job is scheduled, no previous run known
+              'running'   => job is currently active
+              'succeeded' => the last run was succesful
+              'failed'    => the last run was unsuccesful$$;
