@@ -207,7 +207,7 @@ If the job is not running, nothign will happen
 
 <table>
 <tr><td>job_name</td><td>Name of the job to stop.</td></tr>
-<tr><td>force</td><td>If false (default), the job will be stopped using pg_cancel_backend(). If true then  pg_terminate_backend() will be used. See the [Postgres manual](https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-SIGNAL).</td></tr>
+<tr><td>force</td><td>If false (default), the job will be stopped using pg_cancel_backend(). If true then  pg_terminate_backend() will be used. See the <a href="https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-SIGNAL">Postgres manual</a>.</td></tr>
 <tr><td>user_name</td><td>The user name of the job if that is not the current user.</td></tr>
 </table>
 
