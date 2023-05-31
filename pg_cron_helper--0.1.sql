@@ -145,7 +145,14 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_create_job is 'Internal function define a job in the cron server database';
 
         /*
-         * procedure _srvr_enable_job
+         * Procedure   : _srvr_enable_job
+         * Description : Calculates a schedule for a job and schedules it.
+         *               To be invoked via dblink from the enable_job() procedure.
+         *               If the job has no repeat_interval, it cannot be enabled.
+         * Arguments   :
+         *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
+         *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
+         *    p_job_name        : The last part to uniquely identify the job
          */
         create procedure _srvr_enable_job
             ( p_database_name        name
@@ -212,7 +219,13 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_enable_job is 'Internal function schedule a job in the cron server database';
 
         /*
-         * procedure _srvr_disable_job
+         * Procedure   : _srvr_disable_job
+         * Description : Unschedules a job
+         *               To be invoked via dblink from the disable_job() procedure.
+         * Arguments   :
+         *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
+         *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
+         *    p_job_name        : The last part to uniquely identify the job
          */
         create procedure _srvr_disable_job
             ( p_database_name        name
@@ -247,7 +260,14 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_disable_job is 'Internal function unschedule a job in the cron server database';
 
         /*
-         * procedure _srvr_drop_job
+         * Procedure   : _srvr_drop_job
+         * Description : To be invoked via dblink from the drop_job() procedure.
+         *               It deletes the job definition.
+         * Arguments   :
+         *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
+         *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
+         *    p_job_name        : The last part to uniquely identify the job 
+         *    p_force           : If true, a possibly running instance of the job will be killed using pg_terminate_backend()
          */
         create procedure _srvr_drop_job
             ( p_database_name        name
@@ -292,7 +312,14 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_drop_job is 'Internal function remove a job from the cron server database';
 
         /*
-         * procedure _srvr_stop_job
+         * Procedure   : _srvr_stop_job
+         * Description : Aborts a currently running job.
+         *               This procedure is intended to be invoked via the stop_job() procedure via dblink.
+         * Arguments   :
+         *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
+         *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
+         *    p_job_name        : The last part to uniquely identify the job 
+         *    p_force           : If true, pg_terminate_backend() will be invoked. Else pg_cancel_backend();
          */
         create procedure _srvr_stop_job
             ( p_database_name        name
@@ -335,7 +362,15 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_stop_job is 'Internal function to abort a job execution in the cron server database';
 
         /*
-         * procedure _srvr_run_job
+         * Procedure   : _srvr_run_job
+         * Description : Schedules the job with a five second interval, so there is a safe margin to unschedule or reschedule
+         *               the job when execution commences. The job is scheduled with setting 'once' so that the _srvr_job_execution_started
+         *               procedure knows it is running outside its normal schedule.
+         *               This procedure is intended to be invoked via the run_job() procedure via dblink.
+         * Arguments   :
+         *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
+         *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
+         *    p_job_name        : The last part to uniquely identify the job 
          */
         create procedure _srvr_run_job
             ( p_database_name        name
@@ -380,7 +415,19 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_run_job is 'Internal function to schedule a job in 5 seconds in the cron server database';
 
         /*
-         * procedure _srvr_job_execution_started
+         * Procedure   : _srvr_job_execution_started
+         * Description : Is invoked by procedure _cron_job_execution, via dblink, in a transaction of its own, to indicate that
+         *               the execution of a job has started. It is intended to check the schedule, an re-schedule if necessary.
+         * Arguments   :
+         *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
+         *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
+         *    p_job_name        : The last part to uniquely identify the job
+         *    p_once            : If true, the job is running outside its normal schedule, probably because of a job_run() invocation.
+         *                        The job has to be rescheduled. 
+         * 
+         * The cron.job_definition table is interogated to check the cron pattern. If that starts with an euqals sign (=) or a
+         * greater thansign (>), then a new cron schedule will be calculated for the next run.
+         * The next start timestamp will be calculated and if that is beyond the job's end data, the job will be unscheduled.  
          */
         create procedure _srvr_job_execution_started
             ( p_database_name        name
@@ -500,7 +547,25 @@ job run detail via the job table may not always be a good idea.';
         comment on procedure cron._srvr_job_execution_started is 'Internal function to indicate that a job execution has started in the cron server database';
 
         /*
-         * function _srvr_make_cron_patten
+         * Function    : _srvr_make_cron_patten
+         * Description : Creates a cron pattern from the p_schedule argument
+         * Arguments   :
+         *    p_start_timestamp : First possible run time for the job. If in the future, the created cron pattern will reflect the first
+         *                        possible opportunity at or after that timestamp, obeying the p_schedule pattern.
+         *                        For strictly interval based patterns, the intervals will be calculated starting from p_start_timestamp.
+         *    p_end_timestamp   : When the next run happens to start after the p_end_timestamp, then an empty string is returned
+         *                        to indicate that the job is to be unscheduled. May be null, which means: indefinitely.
+         *    p_schedule        : Can be - a cron pattern, which will be returned as is.
+         *                               - a pg_cron 'nn seconds' interval, which will be returned as is.
+         *                               - an Oracle-ish interval definition like 'FREQ=HOURLY;INTERVAL=2;BYHOUR=9,10,11,12,13,14,15,16,17;BYDAY=SAT,SUN'.
+         * Returns     : One of:
+         *    - An empty string, meaning that the next run will be beyond the end timestamp, su must be unscheduled.
+         *    - A pg_cron 'n seconds' string, which can be directly inputted into pg_cron.
+         *    - A standard cron pattern, which can be directly inputted into pg_cron and remain being used there.
+         *    - A standard cron pattern preceded by an equals sign (like '=18 15 12 5 *'), which means that the next execution should start at 
+         *      that timestamp (like: 'May 12 15:18'), and that the next run is to be recalculated on start of execution.
+         *    - A standard cron pattern preceded by an greater than sign (like '>18 15 12 5 3') when the next run will be more than a year in the
+         *      future. When execution starts, the job willl be rescheduled, but the job action will not be performed in that run.  
          */
         create function _srvr_make_cron_patten
             ( p_start_timestamp timestamp with time zone
@@ -806,7 +871,11 @@ job run detail via the job table may not always be a good idea.';
         comment on function cron._srvr_make_cron_patten is 'Internal function to calculate a cron pattern from a scheduler pattern in the cron server database';
 
         /*
-         * function _srvr_cron_at_timestamp
+         * Function    : _srvr_cron_at_timestamp
+         * Description : Creates a cron pattern to execute at the given timestamp
+         * Arguments   :
+         *    p_at_timestamp    : The timestamp for which the cron pattern is to be generated.
+         * Returns     : A cron pattern 
          */
         create function _srvr_cron_at_timestamp(p_at_timestamp timestamp with time zone) returns text language plpgsql as $body$
         declare
@@ -828,7 +897,14 @@ job run detail via the job table may not always be a good idea.';
         comment on function cron._srvr_cron_at_timestamp is 'Internal function to calculate a cron pattern to run at a given timestamp in the cron server database';
 
         /*
-         * function _srvr_calculate_next_run_from_cron_pattern
+         * Function    : _srvr_calculate_next_run_from_cron_pattern
+         * Description : Creates a cron pattern to execute at the given timestamp
+         * Arguments   :
+         *    cron_pattern      : The cron pattern for which to calculate the next timestamp at which a job may start.
+         *    p_end_timestamp   : If the calculated timestamp is beyond this timestamp, the return will be null -> no longer scheduled.
+         *                        May be null if the schedule is meant to run indefinitely
+         * Returns     : A timestamp at which the job is supposed to start next time or null if the job is
+         *               not supposed to start any more.  
          */
         create function _srvr_calculate_next_run_from_cron_pattern
             ( cron_pattern    text
@@ -918,7 +994,14 @@ job run detail via the job table may not always be a good idea.';
         comment on function cron._srvr_calculate_next_run_from_cron_pattern is 'Internal function to calculate the next run timestamp from a given cron pattern in the cron server database';
 
         /*
-         * function _srvr_first_valid_month
+         * Function    : _srvr_first_valid_month
+         * Description : Checks if the run_timestamp is allowed to run in that month according to the month pattern
+         *               and suggests the next valid month if it isn't
+         * Arguments   :
+         *    month_pattern     : Comma separated list of month numbers or '*' for any month
+         *    run_timestamp     : The tentative run timestamp
+         * Returns     : If allowed, the run_timestamp. Otherwise the start of the first month after run_timestamp in
+         *               which execution is allowed. 
          */
         create function _srvr_first_valid_month(month_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -943,7 +1026,14 @@ job run detail via the job table may not always be a good idea.';
         comment on function cron._srvr_first_valid_month is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         * function _srvr_first_valid_day_of_month
+         * Function    : _srvr_first_valid_day_of_month
+         * Description : Checks if the run_timestamp is allowed to run in that day of month according to the day_of_month_pattern
+         *               and suggests the next valid day if it isn't
+         * Arguments   :
+         *    month_pattern     : Comma separated list of day of month numbers or '*' for any month
+         *    run_timestamp     : The tentative run timestamp
+         * Returns     : If allowed, the run_timestamp. Otherwise the start of the first day after run_timestamp in
+         *               which execution is allowed. 
          */
         create function _srvr_first_valid_day_of_month(day_of_month_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -968,7 +1058,14 @@ job run detail via the job table may not always be a good idea.';
         comment on function cron._srvr_first_valid_day_of_month is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         * function _srvr_first_valid_day_of_week
+         * Function    : _srvr_first_valid_day_of_week
+         * Description : Checks if the run_timestamp is allowed to run in that day of week according to the day_of_week_pattern
+         *               and suggests the next valid day of week if it isn't
+         * Arguments   :
+         *    month_pattern     : Comma separated list of day (0 - 7 for Sunday - Saturday) numbers or '*' for any day
+         *    run_timestamp     : The tentative run timestamp
+         * Returns     : If allowed, the run_timestamp. Otherwise the start of the first day of week after run_timestamp in
+         *               which execution is allowed. 
          */
          create function _srvr_first_valid_day_of_week(day_of_week_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
@@ -993,17 +1090,24 @@ job run detail via the job table may not always be a good idea.';
         comment on function cron._srvr_first_valid_day_of_week is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         * function _srvr_first_valid_hour
+         * Function    : _srvr_first_valid_hour
+         * Description : Checks if the run_timestamp is allowed to run in that hour according to the hour pattern
+         *               and suggests the next valid hour if it isn't
+         * Arguments   :
+         *    month_pattern     : Comma separated list of month numbers or '*' for any hour
+         *    run_timestamp     : The tentative run timestamp
+         * Returns     : If allowed, the run_timestamp. Otherwise the start of the first hour after run_timestamp in
+         *               which execution is allowed. 
          */
-         create function _srvr_first_valid_hour(hour_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
-         declare
-             arr               text[];
-             result_timestamp  timestamp := run_timestamp;
-         begin
-             if hour_pattern != '*' then
-        	    arr = regexp_split_to_array(hour_pattern, ',');
-        	    if not extract(hour from result_timestamp)::text = any (arr) then
-        	        loop
+        create function _srvr_first_valid_hour(hour_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
+        declare
+            arr               text[];
+            result_timestamp  timestamp := run_timestamp;
+        begin
+            if hour_pattern != '*' then
+                arr = regexp_split_to_array(hour_pattern, ',');
+                if not extract(hour from result_timestamp)::text = any (arr) then
+                    loop
         	            if extract(hour from result_timestamp)::text = any (arr) then
         	                exit;
         	            end if;
@@ -1011,14 +1115,21 @@ job run detail via the job table may not always be a good idea.';
         	        end loop;
         	        result_timestamp := date_trunc('hour', result_timestamp);
         	    end if;
-        	 end if;
-        	 return result_timestamp;
-         end -- _srvr_first_valid_hour
-         $body$;
+        	end if;
+        	return result_timestamp;
+        end -- _srvr_first_valid_hour
+        $body$;
         comment on function cron._srvr_first_valid_hour is 'Internal function to validate a cron pattern in the cron server database';
 
         /*
-         * function _srvr_first_valid_minute
+         * Function    : _srvr_first_valid_minute
+         * Description : Checks if the run_timestamp is allowed to run in that minute according to the minute pattern
+         *               and suggests the next valid minute if it isn't
+         * Arguments   :
+         *    month_pattern     : Comma separated list of minute numbers or '*' for any minute
+         *    run_timestamp     : The tentative run timestamp
+         * Returns     : If allowed, the run_timestamp. Otherwise the start of the first minute after run_timestamp in
+         *               which execution is allowed. 
          */
          create function _srvr_first_valid_minute(minute_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
