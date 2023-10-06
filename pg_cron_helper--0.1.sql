@@ -28,7 +28,7 @@
      if not found then
          raise exception 'The pg_cron_helper extension needs the pg_cron extension to be installed in a database in the cluster';
      end if;
-     
+
      /*
       * Foreign data wrapper stuff to reach the pg_cron server database and for dblink connections
       * to accommodate autonomous transactions.
@@ -56,7 +56,7 @@
             ( pk                   bigint  generated always as identity primary key
             , database_name        name         not null
             , user_name            name         not null
-            , job_name             varchar(128) not null 
+            , job_name             varchar(128) not null
             , job_action           text         not null
             , start_date           timestamp with time zone not null default clock_timestamp()
             , repeat_interval      text         not null default ''
@@ -66,7 +66,7 @@
             , jobid                bigint
             , cron_pattern         text         not null default ''
             , constraint uq_job_definition unique(database_name, user_name, job_name)
-            , constraint fk_job_definition_cron_job 
+            , constraint fk_job_definition_cron_job
                   foreign key (jobid)
                   references cron.job(jobid)
                   on update cascade
@@ -103,7 +103,7 @@ Otherwise a cron pattern that will define the next execution(s)';
                   foreign key (job_definition_pk)
                   references cron.job_definition (pk)
                   on delete cascade
-            , constraint fk_job_run_job_run_details 
+            , constraint fk_job_run_job_run_details
                   foreign key (job_run_details_runid)
                   references cron.job_run_details(runid)
                   on delete cascade
@@ -132,11 +132,11 @@ job run detail via the job table may not always be a good idea.';
             ) security definer language plpgsql as $body$
         declare
         begin
-            insert into cron.job_definition 
+            insert into cron.job_definition
                 ( database_name, user_name, job_name, job_action, start_date, repeat_interval, end_date, auto_drop, comments )
             values
                 ( p_database_name, p_user_name, p_job_name, p_job_action, p_start_date, p_repeat_interval, p_end_date, p_auto_drop, p_comments);
-        
+
             if p_enabled then
                 call cron._srvr_enable_job(p_database_name, p_user_name, p_job_name);
             end if;
@@ -169,7 +169,7 @@ job run detail via the job table may not always be a good idea.';
             v_action           text;
         begin
             select pk, jobid, start_date, repeat_interval, end_date, job_action
-              into v_derinition_pk, v_jobid, v_start_date, v_repeat_interval, v_end_date, v_action 
+              into v_derinition_pk, v_jobid, v_start_date, v_repeat_interval, v_end_date, v_action
             from cron.job_definition
             where database_name = p_database_name
             and user_name = p_user_name
@@ -184,7 +184,7 @@ job run detail via the job table may not always be a good idea.';
             if v_repeat_interval = '' then
                 raise exception 'job ''%'' needs a repeat interval to be enabled', p_job_name;
             end if;
-            
+
             v_cron_pattern := cron._srvr_make_cron_patten(v_start_date, v_end_date, v_repeat_interval);
             if v_cron_pattern = '' then
             	 raise exception 'job ''%'' cannot be enabled as the next run will be after the end date %', p_job_name, v_end_date;
@@ -236,7 +236,7 @@ job run detail via the job table may not always be a good idea.';
             v_description_pk bigint;
             v_jobid          bigint;
         begin
-            select pk, jobid into v_description_pk, v_jobid 
+            select pk, jobid into v_description_pk, v_jobid
             from cron.job_definition
             where database_name = p_database_name
             and user_name = p_user_name
@@ -248,9 +248,9 @@ job run detail via the job table may not always be a good idea.';
                 raise notice 'job ''%'' is database ''%'' is already disabled', p_job_name, p_database_name;
                 return;
             end if;
-            
+
             perform cron.unschedule(v_jobid);
-            
+
             update cron.job_definition
             set cron_pattern = ''
               , jobid = null
@@ -266,7 +266,7 @@ job run detail via the job table may not always be a good idea.';
          * Arguments   :
          *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
          *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
-         *    p_job_name        : The last part to uniquely identify the job 
+         *    p_job_name        : The last part to uniquely identify the job
          *    p_force           : If true, a possibly running instance of the job will be killed using pg_terminate_backend()
          */
         create procedure _srvr_drop_job
@@ -280,7 +280,7 @@ job run detail via the job table may not always be a good idea.';
             v_jobid          bigint;
             v_job_pid        int;
         begin
-            select pk, jobid into v_description_pk, v_jobid 
+            select pk, jobid into v_description_pk, v_jobid
             from cron.job_definition
             where database_name = p_database_name
             and user_name = p_user_name
@@ -289,8 +289,8 @@ job run detail via the job table may not always be a good idea.';
                 raise notice 'job ''%'' is not known in database ''%'' for user ''%''', p_job_name, p_database_name, p_user_name;
                 return;
             end if;
-            
-            if v_jobid is not null then 
+
+            if v_jobid is not null then
             	perform cron.unschedule(v_jobid);
                 if p_force then
                     select job_pid
@@ -304,7 +304,7 @@ job run detail via the job table may not always be a good idea.';
                     end if;
                 end if;
             end if;
-            
+
             delete from  cron.job_definition
             where pk = v_description_pk;
         end -- _srvr_drop_job
@@ -318,7 +318,7 @@ job run detail via the job table may not always be a good idea.';
          * Arguments   :
          *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
          *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
-         *    p_job_name        : The last part to uniquely identify the job 
+         *    p_job_name        : The last part to uniquely identify the job
          *    p_force           : If true, pg_terminate_backend() will be invoked. Else pg_cancel_backend();
          */
         create procedure _srvr_stop_job
@@ -331,7 +331,7 @@ job run detail via the job table may not always be a good idea.';
             v_jobid    bigint;
             v_job_pid  int;
         begin
-            select jobid into v_jobid 
+            select jobid into v_jobid
             from cron.job_definition
             where database_name = p_database_name
             and user_name = p_user_name
@@ -339,7 +339,7 @@ job run detail via the job table may not always be a good idea.';
             if not found then
                 raise exception 'job ''%'' is not known in database ''%'' for user ''%''', p_job_name, p_database_name, p_user_name;
             end if;
-            
+
             select job_pid
             into v_job_pid
             from cron.job_run_details
@@ -351,7 +351,7 @@ job run detail via the job table may not always be a good idea.';
         	    raise notice 'job ''%'' in database ''%'' for user ''%'' is not running', p_job_name, p_database_name, p_user_name;
                 return;
             end if;
-            
+
             if p_force then
                 perform pg_terminate_backend(v_job_pid);
             else
@@ -370,7 +370,7 @@ job run detail via the job table may not always be a good idea.';
          * Arguments   :
          *    p_database_name   : Name of the database in which the job is running. This is part of the unique identification of the job.
          *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
-         *    p_job_name        : The last part to uniquely identify the job 
+         *    p_job_name        : The last part to uniquely identify the job
          */
         create procedure _srvr_run_job
             ( p_database_name        name
@@ -383,17 +383,17 @@ job run detail via the job table may not always be a good idea.';
             v_action              text;
             v_sql                 text;
         begin
-            select pk, jobid, job_action 
-              into v_description_pk, v_jobid, v_action 
+            select pk, jobid, job_action
+              into v_description_pk, v_jobid, v_action
             from cron.job_definition
             where database_name = p_database_name
             and job_name = p_job_name;
             if not found then
                 raise exception 'job ''%'' is not known in database ''%'' for user ''%''', p_job_name, p_database_name, p_user_name;
             end if;
-        
+
             v_sql := format('call cron._cron_job_execution(%L, %L, true, %L)', p_user_name, p_job_name, v_action);
-            
+
             if v_jobid is null then
                 v_jobid := cron.schedule_in_database( job_name => format('%s:%s', p_database_name, p_job_name)
                                                     , schedule => '5 seconds'
@@ -423,11 +423,11 @@ job run detail via the job table may not always be a good idea.';
          *    p_user_name       : The user name for which the job is running. This is also a pert of the unique identification of the job.
          *    p_job_name        : The last part to uniquely identify the job
          *    p_once            : If true, the job is running outside its normal schedule, probably because of a job_run() invocation.
-         *                        The job has to be rescheduled. 
-         * 
+         *                        The job has to be rescheduled.
+         *
          * The cron.job_definition table is interogated to check the cron pattern. If that starts with an euqals sign (=) or a
          * greater thansign (>), then a new cron schedule will be calculated for the next run.
-         * The next start timestamp will be calculated and if that is beyond the job's end data, the job will be unscheduled.  
+         * The next start timestamp will be calculated and if that is beyond the job's end data, the job will be unscheduled.
          */
         create procedure _srvr_job_execution_started
             ( p_database_name        name
@@ -436,7 +436,7 @@ job run detail via the job table may not always be a good idea.';
             , p_once                 boolean
             ) security definer language plpgsql as $body$
         /*
-         * 
+         *
          */
         declare
             v_description_pk   bigint;
@@ -451,7 +451,7 @@ job run detail via the job table may not always be a good idea.';
             v_retry_count      int := 0;
         begin
             select pk, jobid, job_action, start_date, repeat_interval, end_date, cron_pattern
-              into v_description_pk, v_jobid, v_job_action, v_start_date, v_repeat_interval, v_end_date, v_cron_pattern 
+              into v_description_pk, v_jobid, v_job_action, v_start_date, v_repeat_interval, v_end_date, v_cron_pattern
             from cron.job_definition
             where database_name = p_database_name
             and job_name = p_job_name;
@@ -562,10 +562,10 @@ job run detail via the job table may not always be a good idea.';
          *    - An empty string, meaning that the next run will be beyond the end timestamp, su must be unscheduled.
          *    - A pg_cron 'n seconds' string, which can be directly inputted into pg_cron.
          *    - A standard cron pattern, which can be directly inputted into pg_cron and remain being used there.
-         *    - A standard cron pattern preceded by an equals sign (like '=18 15 12 5 *'), which means that the next execution should start at 
+         *    - A standard cron pattern preceded by an equals sign (like '=18 15 12 5 *'), which means that the next execution should start at
          *      that timestamp (like: 'May 12 15:18'), and that the next run is to be recalculated on start of execution.
          *    - A standard cron pattern preceded by an greater than sign (like '>18 15 12 5 3') when the next run will be more than a year in the
-         *      future. When execution starts, the job willl be rescheduled, but the job action will not be performed in that run.  
+         *      future. When execution starts, the job willl be rescheduled, but the job action will not be performed in that run.
          */
         create function _srvr_make_cron_patten
             ( p_start_timestamp timestamp with time zone
@@ -607,7 +607,7 @@ job run detail via the job table may not always be a good idea.';
                 end if;
                 return p_schedule;
             end if;
-            
+
             foreach key_value_pair in array regexp_split_to_array(p_schedule, '\s*;\s*') loop
                 arr := regexp_split_to_array(key_value_pair, '\s*=\s*');
                 if cardinality(arr) = 1 and arr[1] = '' then
@@ -641,7 +641,7 @@ job run detail via the job table may not always be a good idea.';
                         cron_minute := extract(minute from p_start_timestamp);
                         cron_hour := extract(hour from p_start_timestamp);
                         cron_day_of_week := extract(dow from p_start_timestamp);
-                    when 'DAILY' then 
+                    when 'DAILY' then
                         base_interval := '1 day'::interval;
                         cron_minute := extract(minute from p_start_timestamp);
                         cron_hour := extract(hour from p_start_timestamp);
@@ -652,7 +652,7 @@ job run detail via the job table may not always be a good idea.';
                         base_interval := '1 minute'::interval;
                     when 'SECONDLY' then
                         base_interval := '1 second'::interval;
-                    else 
+                    else
                         raise exception 'Unknown frequency "%" in "%" in "%"', value, key_value_pair, p_schedule;
                     end case;
                 when 'BYHOUR' then
@@ -681,7 +681,7 @@ job run detail via the job table may not always be a good idea.';
                         if cron_day_of_week != '' then
                             cron_day_of_week := cron_day_of_week || ',';
                         end if;
-                        case 
+                        case
                         when dow_text ~ '^(0|7|SU|SUN|SUNDAY)$' then
                             cron_day_of_week := cron_day_of_week || '0';
                         when dow_text ~ '^(1|M|MON|MONDAY)$' then
@@ -698,7 +698,7 @@ job run detail via the job table may not always be a good idea.';
                             cron_day_of_week := cron_day_of_week || '6';
                         else
                             raise exception 'Unknown day_of_week "%" in "%" in "%"', value, key_value_pair, p_schedule;
-                        end case; 
+                        end case;
                     end loop;
                 when 'BYMONTHDAY' then
                     if base_interval = '1 second'::interval then
@@ -712,7 +712,7 @@ job run detail via the job table may not always be a good idea.';
                     when 'YEARLY' then
                     	calculate_next_run := true;
                     when 'MONTHLY' then
-                        if cron_month = '*' 
+                        if cron_month = '*'
                         and numeric_value <= 12 and 12 % numeric_value = 0 then
                             cron_month := '';
                             for nr in 0 .. 11 by value::int loop
@@ -774,7 +774,7 @@ job run detail via the job table may not always be a good idea.';
                             arr[nr] := ((arr[nr]::int + 24 - tz_delta) % 24)::text;
                         end loop;
                         cron_hour := array_to_string(arr, ',');
-                    end if; 
+                    end if;
                 end if;
                 if cron_minute != '*' then
                     tz_delta = extract(minutes from local_utc_offset - cron_utc_offset);
@@ -783,11 +783,11 @@ job run detail via the job table may not always be a good idea.';
                         for nr in 1 .. cardinality(arr) loop
                             arr[nr] := ((arr[nr]::int + 60 - tz_delta) % 60)::text;
                         end loop;
-                        cron_minute := array_to_string(arr, ','); 
+                        cron_minute := array_to_string(arr, ',');
                     end if;
                 end if;
             end if;
-                
+
             timestamp_now := clock_timestamp();
             if timestamp_now <= p_start_timestamp then
                 calculate_next_run = true;
@@ -800,7 +800,7 @@ job run detail via the job table may not always be a good idea.';
                 if cron_interval is null then
                     cron_interval = base_interval;
                 end if;
-                if next_run_timestamp > p_start_timestamp then    
+                if next_run_timestamp > p_start_timestamp then
                     nr = ceil(extract(epoch from next_run_timestamp - p_start_timestamp) / extract(epoch from cron_interval));
                     next_run_timestamp := p_start_timestamp + nr * cron_interval;
                     loop                   -- intervals >= a day, week and month may differ in nr of seconds
@@ -875,7 +875,7 @@ job run detail via the job table may not always be a good idea.';
          * Description : Creates a cron pattern to execute at the given timestamp
          * Arguments   :
          *    p_at_timestamp    : The timestamp for which the cron pattern is to be generated.
-         * Returns     : A cron pattern 
+         * Returns     : A cron pattern
          */
         create function _srvr_cron_at_timestamp(p_at_timestamp timestamp with time zone) returns text language plpgsql as $body$
         declare
@@ -904,7 +904,7 @@ job run detail via the job table may not always be a good idea.';
          *    p_end_timestamp   : If the calculated timestamp is beyond this timestamp, the return will be null -> no longer scheduled.
          *                        May be null if the schedule is meant to run indefinitely
          * Returns     : A timestamp at which the job is supposed to start next time or null if the job is
-         *               not supposed to start any more.  
+         *               not supposed to start any more.
          */
         create function _srvr_calculate_next_run_from_cron_pattern
             ( cron_pattern    text
@@ -946,7 +946,7 @@ job run detail via the job table may not always be a good idea.';
             elsif not cron_pattern ~ '^>?([\d*,]+\s+){4}[\d*,]+$' then
                 raise exception '% is not a legal cron pattern', cron_pattern;
             end if;
-             
+
             next_run_timestamp := date_trunc('minute', clock_timestamp() at time zone cron_time_zone + interval '1 minute');
             arr := regexp_split_to_array(trim(replace(cron_pattern, '>', '')), '\s+');
             cron_minute := arr[1];
@@ -954,7 +954,7 @@ job run detail via the job table may not always be a good idea.';
             cron_day_of_month := arr[3];
             cron_month := arr[4];
             cron_day_of_week := arr[5];
-            
+
             new_timestamp = next_run_timestamp;
             loop
                 if p_end_timestamp is not null and next_run_timestamp > p_end_timestamp at time zone cron_time_zone then
@@ -1001,7 +1001,7 @@ job run detail via the job table may not always be a good idea.';
          *    month_pattern     : Comma separated list of month numbers or '*' for any month
          *    run_timestamp     : The tentative run timestamp
          * Returns     : If allowed, the run_timestamp. Otherwise the start of the first month after run_timestamp in
-         *               which execution is allowed. 
+         *               which execution is allowed.
          */
         create function _srvr_first_valid_month(month_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -1033,7 +1033,7 @@ job run detail via the job table may not always be a good idea.';
          *    month_pattern     : Comma separated list of day of month numbers or '*' for any month
          *    run_timestamp     : The tentative run timestamp
          * Returns     : If allowed, the run_timestamp. Otherwise the start of the first day after run_timestamp in
-         *               which execution is allowed. 
+         *               which execution is allowed.
          */
         create function _srvr_first_valid_day_of_month(day_of_month_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -1065,7 +1065,7 @@ job run detail via the job table may not always be a good idea.';
          *    month_pattern     : Comma separated list of day (0 - 7 for Sunday - Saturday) numbers or '*' for any day
          *    run_timestamp     : The tentative run timestamp
          * Returns     : If allowed, the run_timestamp. Otherwise the start of the first day of week after run_timestamp in
-         *               which execution is allowed. 
+         *               which execution is allowed.
          */
          create function _srvr_first_valid_day_of_week(day_of_week_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
@@ -1097,7 +1097,7 @@ job run detail via the job table may not always be a good idea.';
          *    month_pattern     : Comma separated list of month numbers or '*' for any hour
          *    run_timestamp     : The tentative run timestamp
          * Returns     : If allowed, the run_timestamp. Otherwise the start of the first hour after run_timestamp in
-         *               which execution is allowed. 
+         *               which execution is allowed.
          */
         create function _srvr_first_valid_hour(hour_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
         declare
@@ -1129,7 +1129,7 @@ job run detail via the job table may not always be a good idea.';
          *    month_pattern     : Comma separated list of minute numbers or '*' for any minute
          *    run_timestamp     : The tentative run timestamp
          * Returns     : If allowed, the run_timestamp. Otherwise the start of the first minute after run_timestamp in
-         *               which execution is allowed. 
+         *               which execution is allowed.
          */
          create function _srvr_first_valid_minute(minute_pattern text, run_timestamp timestamp) returns timestamp language plpgsql as $body$
          declare
@@ -1194,7 +1194,7 @@ job run detail via the job table may not always be a good idea.';
 		     result_str           text;
 		begin
 		    select coalesce(det.status, case when def.jobid is null then 'defined' else 'scheduled' end)
-		      into result_str 
+		      into result_str
             from cron.job_definition def
                , lateral (select max(job_run_details_runid) runid from cron.job_run where job_definition_pk = def.pk) run
             left join cron.job_run_details det on det.runid = run.runid
@@ -1221,7 +1221,7 @@ job run detail via the job table may not always be a good idea.';
              result_str := public.dblink_open('cron_server', 'cur', sql);
              if result_str = 'ERROR' then
                  raise exception $$public.dblink_open('cron_server', 'cur', %) returned %$$, sql, result_str;
-             end if;     
+             end if;
              select val into cron_server_present from public.dblink_fetch('cron_server', 'cur', 1) as (val text);
          exception when others then
              result_str := public.dblink_disconnect('cron_server');
@@ -1258,7 +1258,7 @@ create procedure create_job
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
      result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
      if result_str = 'ERROR' then
          raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1286,7 +1286,7 @@ begin
              raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
          end if;
          raise;
-     end;      
+     end;
      result_str := public.dblink_disconnect('cron_server');
      if result_str = 'ERROR' then
          raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1305,7 +1305,7 @@ procedure cron.create_job
     , comments         => Just comment
     , user_name        => Who defined the job
     )';
-    
+
 /*
  * procedure enable_job
  */
@@ -1316,7 +1316,7 @@ create procedure enable_job
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
     result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
     if result_str = 'ERROR' then
         raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1331,7 +1331,7 @@ begin
         if result_str = 'ERROR' then
             raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
         end if;
-    exception when others then   
+    exception when others then
         result_str := public.dblink_disconnect('cron_server');
         if result_str = 'ERROR' then
             raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1347,9 +1347,9 @@ $body$;
 comment on procedure cron.enable_job is 'Makes sure the job is scheduled.
 procedure cron.enable_job
     ( job_name         => Name of the job to be enabled
-    , user_name        => The user name 
+    , user_name        => The user name
     )';
-    
+
 /*
  * procedure disable_job
  */
@@ -1360,7 +1360,7 @@ create procedure disable_job
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
     result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
     if result_str = 'ERROR' then
         raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1375,7 +1375,7 @@ begin
         if result_str = 'ERROR' then
             raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
         end if;
-    exception when others then   
+    exception when others then
         result_str := public.dblink_disconnect('cron_server');
         if result_str = 'ERROR' then
             raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1405,7 +1405,7 @@ create procedure stop_job
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
      result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
      if result_str = 'ERROR' then
          raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1416,12 +1416,12 @@ begin
                       , user_name
                       , job_name
                       , force
-                      ); 
+                      );
          result_str := public.dblink_exec('cron_server', sql);
          if result_str = 'ERROR' then
              raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
          end if;
-     exception when others then     
+     exception when others then
          result_str := public.dblink_disconnect('cron_server');
          if result_str = 'ERROR' then
              raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1451,7 +1451,7 @@ create procedure run_job
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
      result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
      if result_str = 'ERROR' then
          raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1466,7 +1466,7 @@ begin
          if result_str = 'ERROR' then
              raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
          end if;
-     exception when others then     
+     exception when others then
          result_str := public.dblink_disconnect('cron_server');
          if result_str = 'ERROR' then
              raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1496,7 +1496,7 @@ create procedure drop_job
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
     result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
     if result_str = 'ERROR' then
         raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1512,7 +1512,7 @@ begin
         if result_str = 'ERROR' then
             raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
         end if;
-    exception when others then   
+    exception when others then
         result_str := public.dblink_disconnect('cron_server');
         if result_str = 'ERROR' then
             raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1544,7 +1544,7 @@ create procedure _cron_job_execution
 declare
      result_str           text;
      sql                  text;
-begin    
+begin
     result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
     if result_str = 'ERROR' then
         raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1570,7 +1570,7 @@ begin
         if result_str = 'ERROR' then
             raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
         end if;
-    exception when others then     
+    exception when others then
         result_str := public.dblink_disconnect('cron_server');
         if result_str = 'ERROR' then
             raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
@@ -1581,7 +1581,7 @@ begin
     if result_str = 'ERROR' then
         raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;
     end if;
-    
+
     execute task;
 end
 $body$;
@@ -1591,7 +1591,7 @@ comment on procedure cron._cron_job_execution is 'Internal procedure to inform t
  * type job_record
  */
 create type job_record as
-    ( job_name             varchar(128) 
+    ( job_name             varchar(128)
     , job_action           text
     , start_date           timestamp with time zone
     , repeat_interval      text
@@ -1623,7 +1623,7 @@ begin
                      );
         result_str := public.dblink_open('cron_server', 'cur', sql);
         if result_str = 'ERROR' then
-            raise exception $$public.dblink_exec('cron_server', '%') returned %$$, sql, result_str;
+            raise exception $$public.dblink_open('cron_server', '%') returned %$$, sql, result_str;
         end if;
         for rec in select content
                    from public.dblink_fetch('cron_server', 'cur', 10000) as f(content json )
@@ -1659,7 +1659,7 @@ declare
      result_str           text;
      sql                  text;
      function_result      text;
-begin    
+begin
     result_str := public.dblink_connect('cron_server', 'cron_ctrl_server');
     if result_str = 'ERROR' then
         raise exception $$public.dblink_connect('cron_server', 'cron_ctrl_server')' returned %$$, result_str;
@@ -1671,7 +1671,7 @@ begin
                      , job_name
                      );
         select job_state into function_result from public.dblink('cron_server', sql) f(job_state text);
-    exception when others then   
+    exception when others then
         result_str := public.dblink_disconnect('cron_server');
         if result_str = 'ERROR' then
             raise exception $$public.dblink_disconnect('cron_server') returned %$$, result_str;

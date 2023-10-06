@@ -1,6 +1,6 @@
 #extension
 comment = 'Extension to help functionality of pg_cron'
-default_version = '0.2'
+default_version = '0.3'
 relocatable = false
 superuser = true
 requires = 'postgres_fdw, dblink'
